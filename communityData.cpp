@@ -128,6 +128,9 @@ Community::Community(ublas::matrix<double> transition_matrix, vector<string> sp_
     sp_names_repro_death = sp_names;
     set_t_m();
     
+    //Make real transition matrix
+    real_t_m = transition_matrix;
+    
     //Make next load of communities
     while(++current_vec < n_communities)
     {
@@ -451,76 +454,49 @@ vector<int>::size_type Community::n_years(void){
     return years.size();}
 
 //DISPLAY
-boost::numeric::ublas::matrix<double> Community::print_transition_matrix(void)
+boost::numeric::ublas::matrix<double> Community::print_transition_matrix(int width)
 {
     //Setup
     int i,j;
     
     //Header
-    cout << endl << setw(10) << "" ;
+    cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
-        cout << setw(10) << *iter;
-    cout << setw(10) << "Repro." << setw(10) << "Death" << endl;
+        cout << setw(width) << *iter;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
     
     //Looping through
     for(i = 0; i<t_m.size1(); ++i)
     {
-        cout << setw(10) << species_names[i];
+        cout << setw(width) << species_names[i];
         for(j=0; j<t_m.size2(); ++j)
             if(t_m(i,j)>0.0001)
-                cout << setw(10) << setprecision(4) << t_m(i,j);
+                cout << setw(width) << setprecision(4) << t_m(i,j);
             else
-                cout << setw(10) << setprecision(4) << 0;
+                cout << setw(width) << setprecision(4) << 0;
         cout << endl;
     }
     
     return t_m;
 }
-boost::numeric::ublas::matrix<int> Community::print_event_matrix(int index)
+boost::numeric::ublas::matrix<int> Community::print_real_transition_matrix(int width)
 {
-    //Setup
-    assert(index < e_m.size());
-    boost::numeric::ublas::matrix<int> curr_e_m = e_m[index];
-    
     //Header
-    cout << endl << setw(10) << "" ;
+    cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
-        cout << setw(10) << *iter;
-    cout << setw(10) << "Repro." << setw(10) << "Death" << endl;
+        cout << setw(width) << *iter;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
     
     //Looping through
-    for(int i = 0; i<curr_e_m.size1(); ++i)
+    for(int i = 0; i<real_t_m.size1(); ++i)
     {
-        cout << setw(10) << species_names[i];
-        for(int j=0; j<curr_e_m.size2(); ++j)
-            cout << setw(10) << curr_e_m(i,j);
+        cout << setw(width) << species_names[i];
+        for(int j=0; j<real_t_m.size2(); ++j)
+            cout << setw(width) << real_t_m(i,j);
         cout << endl;
     }
     
-    return curr_e_m;
-}
-boost::numeric::ublas::matrix<int> Community::print_real_event_matrix(int index)
-{
-    //Setup
-    assert(index < real_e_m.size());
-    boost::numeric::ublas::matrix<int> curr_e_m = real_e_m[index];
-    
-    //Header
-    cout << endl << setw(10) << "" ;
-    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
-        cout << setw(10) << *iter;
-    cout << setw(10) << "Repro." << setw(10) << "Death" << endl;
-    
-    //Looping through
-    for(int i = 0; i<curr_e_m.size1(); ++i)
-    {
-        cout << setw(10) << species_names[i];
-        for(int j=0; j<curr_e_m.size2(); ++j)
-            cout << setw(10) << curr_e_m(i,j);
-        cout << endl;
-    }
-    
-    return curr_e_m;
+    return real_t_m;
 }
 vector<string> Community::print_community(int index, int width)
 {
@@ -531,25 +507,49 @@ vector<string> Community::print_community(int index, int width)
     cout <<endl;
     return communities[index];
 }
-boost::numeric::ublas::matrix<double> DataSet::print_transition_matrix(int width)
+boost::numeric::ublas::matrix<int> Community::print_event_matrix(int index, int width)
 {
     //Setup
-    int i,j;
+    assert(index < e_m.size());
+    boost::numeric::ublas::matrix<int> curr_e_m = e_m[index];
     
     //Header
-    cout << endl;
+    cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "" << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
     
     //Looping through
-    for(i = 0; i<t_m.size1(); ++i)
+    for(int i = 0; i<curr_e_m.size1(); ++i)
     {
-        cout << setw(10) << species_names[i];
-        for(j=0; j<t_m.size2(); ++j)
-            cout << setw(width) << setprecision(4) << t_m(i,j);
+        cout << setw(width) << species_names[i];
+        for(int j=0; j<curr_e_m.size2(); ++j)
+            cout << setw(width) << curr_e_m(i,j);
         cout << endl;
     }
     
-    return t_m;
+    return curr_e_m;
+}
+boost::numeric::ublas::matrix<int> Community::print_real_event_matrix(int index, int width)
+{
+    //Setup
+    assert(index < real_e_m.size());
+    boost::numeric::ublas::matrix<int> curr_e_m = real_e_m[index];
+    
+    //Header
+    cout << endl << setw(width) << "" ;
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        cout << setw(width) << *iter;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    
+    //Looping through
+    for(int i = 0; i<curr_e_m.size1(); ++i)
+    {
+        cout << setw(width) << species_names[i];
+        for(int j=0; j<curr_e_m.size2(); ++j)
+            cout << setw(width) << curr_e_m(i,j);
+        cout << endl;
+    }
+    
+    return curr_e_m;
 }

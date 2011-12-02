@@ -1,0 +1,16 @@
+README Transition Matrix
+Will Pearse (will.pearse@gmail.com)
+2/12/2011
+
+This is very much a work in progress; I'm simply uploading this because it's got to a point where it's usable.
+To compile, simply whack all the files into a compiler of your choice, and hit compile. No makefile, because I'm working on XCode at the moment, but it shouldn't be too hard.
+Using it is easy - first argument is the input file, second is the output file.
+If you're loading a file, first column is the species' abundance, second is its name, third is the community's name, fourth is the time the data were collected (*this must not be continuous*). No double quotes or spaces, and no blank line at the end. Each community must have an entry for each species in each year, even if it's zero, but if one community has a species that is in no other communities, that species need not be mentioned in the other communities.
+If none of the output makes any sense then tough! Come and ask me :p I'd be very surprised if anyone other than me were looking at this...
+It requires BOOST to compile.
+
+To-do:
+* (Better) randomisation of parameter estimation order
+* Multiple transition matrices per community
+* Sharing of transition matrices between communities
+* Integration with Filzbach

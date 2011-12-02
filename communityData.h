@@ -35,6 +35,7 @@ private:
     void set_e_m(void);
     void set_t_m(double stationary_prob=0.6);
     boost::numeric::ublas::matrix<double> t_m;
+    boost::numeric::ublas::matrix<double> real_t_m;
     std::vector<boost::numeric::ublas::matrix<int> > e_m;
     void initialise(void);
     std::vector<boost::numeric::ublas::matrix<int> > real_e_m;
@@ -51,9 +52,10 @@ public:
     std::vector<std::string> extract_index(int index);
     double calc_likelihoods(void);
     double optimise(int max_iter=100);
-    boost::numeric::ublas::matrix<double> print_transition_matrix(void);
-    boost::numeric::ublas::matrix<int> print_event_matrix(int index);
-    boost::numeric::ublas::matrix<int> print_real_event_matrix(int index);
+    boost::numeric::ublas::matrix<double> print_transition_matrix(int width=4);
+    boost::numeric::ublas::matrix<int> print_real_transition_matrix(int width=4);
+    boost::numeric::ublas::matrix<int> print_event_matrix(int index, int width=4);
+    boost::numeric::ublas::matrix<int> print_real_event_matrix(int index, int width=4);
     std::vector<std::string> print_community(int index, int width=10);
     
     friend class DataSet;
