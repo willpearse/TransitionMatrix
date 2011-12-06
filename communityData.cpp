@@ -530,6 +530,29 @@ boost::numeric::ublas::matrix<int> Community::print_event_matrix(int index, int 
     
     return curr_e_m;
 }
+void Community::write_transition_matrix(const char* file_name)
+{
+    //Setup
+    ofstream file(file_name);
+    
+    //Header
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        file << "," << *iter;
+    file << ",Reproduction,Death" << endl;
+    
+    //Looping through
+    for(int i = 0; i<t_m.size1(); ++i)
+    {
+        file << species_names[i];
+        for(int j=0; j<t_m.size2(); ++j)
+            if(t_m(i,j)>0.0001)
+                file << "," << setprecision(4) << t_m(i,j);
+            else
+                file << "," << 0;
+        file << endl;
+    }
+    file.close();
+}
 boost::numeric::ublas::matrix<int> Community::print_real_event_matrix(int index, int width)
 {
     //Setup

@@ -16,7 +16,7 @@ using namespace boost::numeric;
 
 int main (int argc, const char * argv[])
 {
-    if(argc == 2)
+    if(argc == 3)
     {
         //Only works for the first community...
         cout << "Loading dataset: " << argv[1] << endl;
@@ -26,6 +26,9 @@ int main (int argc, const char * argv[])
         data.communities[0].print_event_matrix(0,8);
         cout << "Overall transition matrix:" << endl;
         data.communities[0].print_transition_matrix(8);
+        cout << "Writing transition matrix to file..." << endl;
+        data.communities[0].write_transition_matrix(argv[2]);
+        cout << "...done" << endl;
     } else
     {
         if(argc == 4)

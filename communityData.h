@@ -53,6 +53,7 @@ public:
     double calc_likelihoods(void);
     double optimise(int max_iter=100);
     boost::numeric::ublas::matrix<double> print_transition_matrix(int width=4);
+    void write_transition_matrix(const char* file_name);
     boost::numeric::ublas::matrix<int> print_real_transition_matrix(int width=4);
     boost::numeric::ublas::matrix<int> print_event_matrix(int index, int width=4);
     boost::numeric::ublas::matrix<int> print_real_event_matrix(int index, int width=4);
