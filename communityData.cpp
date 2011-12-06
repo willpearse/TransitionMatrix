@@ -40,6 +40,10 @@ static vector<string> fill_community(string species, int abundance)
     }
     return output;
 }
+static double log_add(double x, double y)
+{
+    return(x + log(y));
+}
 void Community::set_e_m(void)
 {   
     //Clean this bullshit up and learn to preallocate with pointers...
@@ -58,6 +62,25 @@ void Community::set_t_m(double stationary_prob)
             else
                 t_m(i,j) = leftover_prob;
 }
+void Community::set_t_null(void)
+{
+    t_null.resize(species_names.size());
+    vector<double> species_count(species_names.size(), 0);
+    double total_count;
+    
+    for(int i=0; i<communities.size(); ++i)
+        for(int j=0; j<communities[i].size(); ++j)
+            for(int k=0; k<species_names.size(); ++k)
+                if(species_names[k] == communities[i][j])
+                {
+                    ++species_count[k];
+                    break;
+                }
+    
+    total_count = accumulate(species_count.begin(), species_count.end(), 0);
+    for(int i=0; i<species_count.size(); ++i)
+        t_null[i] = species_count[i] / total_count;
+}
 void DataSet::set_t_m(double stationary_prob)
 {
     t_m.resize(species_names.size(), species_names.size()+2);
@@ -68,6 +91,25 @@ void DataSet::set_t_m(double stationary_prob)
                 t_m(i,j) = stationary_prob;
             else
                 t_m(i,j) = leftover_prob;
+}
+void DataSet::set_t_null(void)
+{
+    t_null.resize(species_names.size());
+    vector<double> species_count(species_names.size(), 0);
+    double total_count;
+    for(int x=0; x<communities.size(); ++x)
+        for(int i=0; i<communities[x].communities.size(); ++i)
+            for(int j=0; j<communities[x].communities[i].size(); ++j)
+                for(int k=0; k<species_names.size(); ++k)
+                    if(species_names[k] == communities[x].communities[i][j])
+                    {
+                        ++species_count[k];
+                        break;
+                    }
+    
+    total_count = accumulate(species_count.begin(), species_count.end(), 0);
+    for(int i=0; i<species_count.size(); ++i)
+        t_null[i] = species_count[i] / total_count;
 }
 
 ////////////////
@@ -177,6 +219,7 @@ Community::Community(ublas::matrix<double> transition_matrix, vector<string> sp_
         communities[i].erase(communities[i].begin());
     }
     community_name = name;
+    set_t_null();
 }
 DataSet::DataSet(const char *file, double stationary_prob)
 {
@@ -224,6 +267,7 @@ DataSet::DataSet(const char *file, double stationary_prob)
         communities[i].initialise();
     
     set_t_m(stationary_prob);
+    set_t_null();
 }
 
 //INITIALISATION
@@ -258,6 +302,9 @@ void Community::initialise(void)
     
     //Make event matrices for everything
     set_e_m();
+    
+    //Make the null transition matrix
+    set_t_null();
 }
 void Community::add_species(string species, string abundance, string year)
 {
@@ -294,7 +341,7 @@ void Community::add_species(string species, string abundance, string year)
 double likelihood_parameter_com(double prob, int row, int column, vector<ublas::matrix<int> > e_m, ublas::matrix<double> t_m, int minimising)
 {
     //Setup
-    vector<double> likelihoods(e_m.size()), row_likelihood(t_m.size2()), current_likelihood(e_m.size());
+    vector<double> likelihoods(e_m.size()), current_likelihood(e_m.size());
     int i;
     double total_likelihood,fudge_factor,leftover;
     
@@ -362,6 +409,75 @@ double likelihood_parameter_data(double prob, int row, int column, vector<Commun
     else
         return total_likelihood;
 }
+double likelihood_null_parameter_com(double prob, int species, vector<vector<string> > communities, vector<double> t_null, vector<string> species_names, int minimising)
+{
+    //Setup
+    vector<double> likelihoods(communities.size()), current_likelihood(communities.size());
+    double total_likelihood,fudge_factor,leftover;
+    
+    //Set the new probability in the transition_matrix
+    leftover = 1 - prob;
+    fudge_factor = 1 - t_null[species];
+    for(int i=0; i<t_null.size(); ++i)
+        t_null[i] = (t_null[i] / fudge_factor) * leftover;
+    t_null[species] = prob;
+    
+    //Calculate likelihood
+    for(int i=0; i < communities.size(); ++i)
+    {
+        current_likelihood = likelihood_null(t_null, communities[i], species_names);
+        
+        for(int j=0; j<current_likelihood.size(); ++j)
+            current_likelihood[j] = log(current_likelihood[j]);
+        
+        likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0);
+        current_likelihood.clear();
+    }
+    
+    //Return inverse of log likelihood if passing to a minimising function
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    if(minimising)
+        return (0-total_likelihood);
+    else
+        return total_likelihood;
+}
+double likelihood_null_parameter_data(double prob, int species, vector<Community> communities, vector<double> t_null, vector<string> species_names, int minimising)
+{
+    //Setup
+    vector<double> likelihoods(communities.size()), current_likelihood(communities.size());
+    double total_likelihood,fudge_factor,leftover;
+    
+    //Set the new probability in the transition_matrix
+    leftover = 1 - prob;
+    fudge_factor = 1 - t_null[species];
+    for(int i=0; i<t_null.size(); ++i)
+        t_null[i] = (t_null[i] / fudge_factor) * leftover;
+    t_null[species] = prob;
+    
+    //Calculate likelihood for each community
+    for(int com=0; com<communities.size(); ++com)
+    {
+        vector<double> com_likelihoods(communities[com].communities.size());
+        for(int i=0; i < communities[com].communities.size(); ++i)
+        {
+            vector<double> current_likelihood;
+            current_likelihood = likelihood_null(t_null, communities[com].communities[i], species_names);
+            
+            for(int j=0; j<current_likelihood.size(); ++j)
+                current_likelihood[j] = log(current_likelihood[j]);
+            
+            com_likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0);
+        }
+        likelihoods[com] = accumulate(com_likelihoods.begin(), com_likelihoods.end(), 0.0);
+    }
+    
+    //Return inverse of log likelihood if passing to a minimising function
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    if(minimising)
+        return (0-total_likelihood);
+    else
+        return total_likelihood;
+}
 double Community::optimise(int max_iter)
 {
     //Setup
@@ -386,6 +502,13 @@ double Community::optimise(int max_iter)
         }
     }
     return calc_likelihoods();
+}
+double Community::optimise_null(int max_iter)
+{
+    //Loop through each parameter
+    for(species=0; species<t_null.size(); ++species)
+        t_null[species] = boost::math::tools::brent_find_minima(boost::bind(likelihood_null_parameter_com, _1, species,communities,t_null,species_names, 1), 0.0, 1.0, max_iter).first;
+    return calc_null_likelihoods();
 }
 void DataSet::optimise(int max_iter)
 {
@@ -412,8 +535,16 @@ void DataSet::optimise(int max_iter)
         }
     }
 }
+void DataSet::optimise_null(int max_iter)
+{
+    vector<double> likelihoods(communities.size());
+    for(species=0; species<t_null.size(); ++species)
+        t_null[species] = boost::math::tools::brent_find_minima(boost::bind(likelihood_null_parameter_data, _1, species,communities,t_null,species_names,1), 0.0, 1.0, max_iter).first;
+}
 
-//LIKELIHOOD
+/////////////////
+//LIKELIHOOD/////
+/////////////////
 double Community::calc_likelihoods(void)
 {
     //Setup
@@ -424,15 +555,32 @@ double Community::calc_likelihoods(void)
     for(int i =0; i < e_m.size(); ++i)
     {
         current_likelihood = likelihood(t_m, e_m[i]);
-        likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 1.0, multiplies<double>());
+        likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0, log_add);
         current_likelihood.clear();
     }
     
     //Accumulate and return total likelihood
-    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 1.0, multiplies<double>());
-    return log(total_likelihood);
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    return total_likelihood;
 }
-
+double Community::calc_null_likelihoods(void)
+{
+    //Setup
+    double total_likelihood;
+    vector<double> likelihoods(communities.size()), current_likelihood;
+    
+    //Loop through and calculate likelihoods
+    for(int i =0; i < communities.size(); ++i)
+    {
+        current_likelihood = likelihood_null(t_null, communities[i], species_names);
+        likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0, log_add);
+        current_likelihood.clear();
+    }
+    
+    //Accumulate and return total likelihood
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    return total_likelihood;
+}
 //ACCESS
 vector<string> Community::extract_year(int year)
 {
@@ -478,6 +626,25 @@ boost::numeric::ublas::matrix<double> Community::print_transition_matrix(int wid
     }
     
     return t_m;
+}
+vector<double> Community::print_null_transition_vector(int width)
+{
+    //Header
+    cout << endl;
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        cout << setw(width) << *iter;
+    cout << endl;
+    
+    //Looping through
+    for(int i = 0; i<t_null.size(); ++i)
+    {
+        if(t_null[i]>0.0001)
+            cout << setw(width) << setprecision(4) << t_null[i];
+        else
+            cout << setw(width) << setprecision(4) << 0;
+    }
+    cout << endl;   
+    return t_null;
 }
 boost::numeric::ublas::matrix<int> Community::print_real_transition_matrix(int width)
 {
@@ -536,6 +703,7 @@ void Community::write_transition_matrix(const char* file_name)
     ofstream file(file_name);
     
     //Header
+    file << calc_likelihoods();
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         file << "," << *iter;
     file << ",Reproduction,Death" << endl;
@@ -552,6 +720,28 @@ void Community::write_transition_matrix(const char* file_name)
         file << endl;
     }
     file.close();
+}
+void Community::write_null_transition_vector(const char* file_name)
+{
+    //Setup
+    ofstream file(file_name);
+    
+    //Header
+    file << calc_null_likelihoods();
+    //Header
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        file << "," << *iter;
+    file << endl;
+    
+    //Looping through
+    file << setprecision(4) << t_null[0];
+    for(int i = 1; i<t_null.size(); ++i)
+    {
+        if(t_null[i]>0.0001)
+            file << "," << setprecision(4) << t_null[i];
+        else
+            file << "," << setprecision(4) << 0;
+    }
 }
 boost::numeric::ublas::matrix<int> Community::print_real_event_matrix(int index, int width)
 {

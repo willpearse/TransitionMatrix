@@ -27,6 +27,10 @@ std::vector<double> likelihood(boost::numeric::ublas::matrix<double> transition_
 
 std::vector<double> likelihood(boost::numeric::ublas::matrix<double> transition_matrix, boost::numeric::ublas::matrix<int> event_matrix);
 
+std::vector<double> likelihood(std::vector<double> transition_vector, boost::numeric::ublas::matrix<int> event_matrix);
+
+std::vector<double> likelihood_null(std::vector<double> transition_null, std::vector<std::string> community, std::vector<std::string> species_names);
+
 int find_max(std::vector<double> vec);
 
 int best_transition_to_sp(boost::numeric::ublas::matrix<double> t_m, int sp);

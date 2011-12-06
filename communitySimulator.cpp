@@ -113,7 +113,20 @@ vector<double> likelihood(ublas::matrix<double> transition_matrix, ublas::matrix
     assert(x == n_events);
     return likelihoods;
 }
-
+vector<double> likelihood_null(vector<double> transition_null, vector<string> community, vector<string> species_names)
+{
+    vector<double> likelihoods(community.size());
+    
+    //Add each species' log likelihood to the likelihoods list
+    for(int i=0; i<community.size(); ++i)
+        for(int j=0; j<species_names.size(); ++j)
+            if(species_names[j]==community[i])
+            {
+                likelihoods[i] = transition_null[j];
+                break;
+            }
+    return likelihoods;
+}
 //Needed because you can't pass iterators around like indices
 // - very dirty hack
 int find_max(vector<double> vec)
