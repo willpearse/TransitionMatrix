@@ -80,6 +80,8 @@ private:
     void set_t_m(double stationary_prob=0.6);
     void set_t_null(void);
     std::vector<double> t_null;
+    double calc_likelihoods(void);
+    double calc_null_likelihoods(void);
 public:
     DataSet(const char *file, double prob=0.6);
     double internal_optimise(double prob);
@@ -87,6 +89,9 @@ public:
     void optimise_null(int max_iter=100);
     void partition(int max_iter=100);
     boost::numeric::ublas::matrix<double> print_transition_matrix(int width=4);
+    std::vector<double> print_null_transition_vector(int width=4);
+    void write_transition_matrix(const char* file_name);
+    void write_null_transition_vector(const char* file_name);
     std::vector<Community> communities;
     
     int n_communities,row,column,species;

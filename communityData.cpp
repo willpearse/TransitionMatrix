@@ -530,6 +530,7 @@ void DataSet::optimise(int max_iter)
             else
             {
                 t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
+                cout << t_m(row,column) << ",";
                 sum_of_parameters += t_m(row,column);
             }
         }
@@ -563,6 +564,20 @@ double Community::calc_likelihoods(void)
     total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
     return total_likelihood;
 }
+double DataSet::calc_likelihoods(void)
+{
+    //Setup
+    double total_likelihood;
+    vector<double> likelihoods(communities.size());
+    
+    //Loop through and calculate likelihoods
+    for(int i =0; i < communities.size(); ++i)
+        likelihoods[i] = communities[i].calc_likelihoods();
+    
+    //Accumulate and return total likelihood
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    return total_likelihood;
+}
 double Community::calc_null_likelihoods(void)
 {
     //Setup
@@ -576,6 +591,20 @@ double Community::calc_null_likelihoods(void)
         likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0, log_add);
         current_likelihood.clear();
     }
+    
+    //Accumulate and return total likelihood
+    total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
+    return total_likelihood;
+}
+double DataSet::calc_null_likelihoods(void)
+{
+    //Setup
+    double total_likelihood;
+    vector<double> likelihoods(communities.size());
+    
+    //Loop through and calculate likelihoods
+    for(int i =0; i < communities.size(); ++i)
+        likelihoods[i] = communities[i].calc_null_likelihoods();
     
     //Accumulate and return total likelihood
     total_likelihood = accumulate(likelihoods.begin(), likelihoods.end(), 0.0);
@@ -627,6 +656,47 @@ boost::numeric::ublas::matrix<double> Community::print_transition_matrix(int wid
     
     return t_m;
 }
+boost::numeric::ublas::matrix<int> Community::print_real_transition_matrix(int width)
+{
+    //Header
+    cout << endl << setw(width) << "" ;
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        cout << setw(width) << *iter;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    
+    //Looping through
+    for(int i = 0; i<real_t_m.size1(); ++i)
+    {
+        cout << setw(width) << species_names[i];
+        for(int j=0; j<real_t_m.size2(); ++j)
+            cout << setw(width) << real_t_m(i,j);
+        cout << endl;
+    }
+    
+    return real_t_m;
+}
+boost::numeric::ublas::matrix<double> DataSet::print_transition_matrix(int width)
+{
+    //Header
+    cout << endl << setw(width) << "" ;
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        cout << setw(width) << *iter;
+    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    
+    //Looping through
+    for(int i = 0; i<t_m.size1(); ++i)
+    {
+        cout << setw(width) << species_names[i];
+        for(int j=0; j<t_m.size2(); ++j)
+            if(t_m(i,j)>0.0001)
+                cout << setw(width) << setprecision(4) << t_m(i,j);
+            else
+                cout << setw(width) << setprecision(4) << 0;
+        cout << endl;
+    }
+    
+    return t_m;
+}
 vector<double> Community::print_null_transition_vector(int width)
 {
     //Header
@@ -646,24 +716,24 @@ vector<double> Community::print_null_transition_vector(int width)
     cout << endl;   
     return t_null;
 }
-boost::numeric::ublas::matrix<int> Community::print_real_transition_matrix(int width)
+vector<double> DataSet::print_null_transition_vector(int width)
 {
     //Header
-    cout << endl << setw(width) << "" ;
+    cout << endl;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << endl;
     
     //Looping through
-    for(int i = 0; i<real_t_m.size1(); ++i)
+    for(int i = 0; i<t_null.size(); ++i)
     {
-        cout << setw(width) << species_names[i];
-        for(int j=0; j<real_t_m.size2(); ++j)
-            cout << setw(width) << real_t_m(i,j);
-        cout << endl;
+        if(t_null[i]>0.0001)
+            cout << setw(width) << setprecision(4) << t_null[i];
+        else
+            cout << setw(width) << setprecision(4) << 0;
     }
-    
-    return real_t_m;
+    cout << endl;   
+    return t_null;
 }
 vector<string> Community::print_community(int index, int width)
 {
@@ -721,7 +791,31 @@ void Community::write_transition_matrix(const char* file_name)
     }
     file.close();
 }
-void Community::write_null_transition_vector(const char* file_name)
+void DataSet::write_transition_matrix(const char* file_name)
+{
+    //Setup
+    ofstream file(file_name);
+    
+    //Header
+    file << calc_likelihoods();
+    for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
+        file << "," << *iter;
+    file << ",Reproduction,Death" << endl;
+    
+    //Looping through
+    for(int i = 0; i<t_m.size1(); ++i)
+    {
+        file << species_names[i];
+        for(int j=0; j<t_m.size2(); ++j)
+            if(t_m(i,j)>0.0001)
+                file << "," << setprecision(4) << t_m(i,j);
+            else
+                file << "," << 0;
+        file << endl;
+    }
+    file.close();
+}
+void DataSet::write_null_transition_vector(const char* file_name)
 {
     //Setup
     ofstream file(file_name);

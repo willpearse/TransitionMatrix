@@ -21,18 +21,18 @@ int main (int argc, const char * argv[])
         //Only works for the first community...
         cout << "Loading dataset: " << argv[2] << endl;
         DataSet data(argv[2]);
-        data.communities[0].optimise();
-        cout << "First community -> second community event matrix: (logLik=" << setprecision(4) << data.communities[0].calc_likelihoods() <<")" << endl;
+        data.optimise();
+        cout << "First community's first year -> second year event matrix: (logLik=" << setprecision(4) << data.communities[0].calc_likelihoods() <<")" << endl;
         data.communities[0].print_event_matrix(0,8);
         cout << "Overall transition matrix:" << endl;
-        data.communities[0].print_transition_matrix(8);
+        data.print_transition_matrix(8);
         cout << "Writing transition matrix to file " << argv[2] << endl;
-        data.communities[0].write_transition_matrix(argv[3]);
+        data.write_transition_matrix(argv[3]);
         cout << "...done (first entry is log likelihood of this model)" << endl;
         cout << "Null model transition vector: (logLik=" << setprecision(4) << data.communities[0].calc_null_likelihoods() <<")" << endl;
-        data.communities[0].print_null_transition_vector(8);
+        data.print_null_transition_vector(8);
         cout << "Writing null transition vector to file " << argv[4] << endl;
-        data.communities[0].write_null_transition_vector(argv[4]);
+        data.write_null_transition_vector(argv[4]);
         cout << "...done (first entry is log likelihood of null model)" << endl;
     } else
     {
