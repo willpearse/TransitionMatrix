@@ -16,6 +16,7 @@ using namespace boost::numeric;
 
 int main (int argc, const char * argv[])
 {
+	cout << "EXPERIMENTAL: Don't trust any results from this version" << endl;
     if(argc == 5)
     {
         //Only works for the first community...
