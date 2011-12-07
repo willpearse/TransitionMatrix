@@ -13,82 +13,6 @@
 using namespace std;
 using namespace boost::numeric;
 
-vector<string> next_step(ublas::matrix<double> transition_matrix, vector<string> current_community, vector<string> species_names)
-{
-    vector<string> next_community = current_community; //Make a copy of the current_community
-    boost::mt19937 rnd_generator(time(NULL)); //Make a random number generator
-    int current_random; //Index we'll be using to figure out what species to add
-    vector<string> new_slots;
-    for(int i=0; i < current_community.size(); ++i) //Loop through each member of the current commnuity
-    {
-        for(int k=0; k < species_names.size(); ++k) //Loop through the possible species
-        {
-            if(current_community[i] == species_names[k])
-            {
-                boost::numeric::ublas::matrix_row<ublas::matrix<double> > matrix_row (transition_matrix, k);
-                boost::random::discrete_distribution<> discrete_dist(matrix_row); //Make a discrete distribution
-                current_random = discrete_dist(rnd_generator); //Bind the generator distribution to a random number generator
-                if(species_names[current_random] != "REPRODUCE") //Assign the next slot, checking to handle reproduced taxa
-                    next_community[i] = species_names[current_random];
-                else
-                    new_slots.push_back(current_community[i]); //Add the extra species we should be adding in
-                    
-                break; //Break out of the for loop
-            }
-        }
-    }
-    next_community.insert(next_community.end(), new_slots.begin(), new_slots.end()); //Add the newly created species into the community
-    return next_community;
-}
-
-vector<double> likelihood(ublas::matrix<double> transition_matrix, vector<string> first_community, vector<string> second_community, vector<string> species_names)
-{
-    assert(species_names.size() == transition_matrix.size2()); //As many columns as species_names (that includes DEAD and REPRODUCE)
-    assert(species_names.size() == (transition_matrix.size1() +2)); //Two fewer rows, because dead and reproduced species don't count
-    
-    int first_index, second_index, sp_index; //Initialise the indices we'll be using
-    const unsigned REPRODUCTION = (species_names.size() - 2); //Reproduction is the penultiamte element in the matrix
-    const unsigned DEATH = (species_names.size() - 1); //Death is the last element in the matrix
-    vector<double> slot_likelihood(second_community.size(), -1), species_count(species_names.size()); //Make holders for each slot, and number of additions to be 'corrected' later when dealing with reproduction
-    for(int i=(second_community.size()-1); i >= 0; --i) //Go along the second community - HACK!!!
-    {
-        if(i > (first_community.size()-1)) //We're dealing with reproduction - HACK!!!
-        {
-            for(sp_index = 0; sp_index < species_names.size(); ++sp_index) //Go along the species_names
-                if(second_community[i] == species_names[sp_index]) //...if they match what we've got
-                    break; //...stop looking
-            assert(sp_index != -1); //We have found a match (nothing should be DEAD here)
-            slot_likelihood[i] = transition_matrix(sp_index, REPRODUCTION);
-            ++species_count[sp_index];
-        }
-        else //Now handle everything else
-        {
-            if(second_community[i] == "DEATH")
-                slot_likelihood[i] = transition_matrix(sp_index, DEATH); //Death is easy to handle immediately
-            else //Anything else requires a search
-            {
-                first_index=-1;
-                second_index=-1;
-                for(int k=0; k < species_names.size(); k++) //Go along the species' names; don't bother stopping the search early
-                {
-                    if(first_community[i] == species_names[k]) //Found the first species
-                        first_index = k;
-                    if(second_community[i] == species_names[k]) //Found the second species
-                        second_index = k;
-                }
-                assert(first_index != -1 && second_index != -1); //We've found both
-                if(species_names[first_index]==species_names[second_index] && species_count[first_index] > 0) //Do we have some reproduction to handle?
-                {
-                    slot_likelihood[i] = 1; //Set the likelihood to something safe
-                    --species_count[first_index]; //Change the handle count
-                } else //Otherwise store the right likelihood
-                    slot_likelihood[i] = transition_matrix(first_index, second_index);
-            }
-        }
-    }
-    return slot_likelihood;
-}
-
 vector<double> likelihood(ublas::matrix<double> transition_matrix, ublas::matrix<int> event_matrix)
 {
     //Setup
@@ -156,14 +80,18 @@ int best_transition_to_sp(ublas::matrix<double> t_m, int sp)
             curr_max = t_m(i, sp);
         }
     }
-    //If we're not going to reproduction (a nonsense) or dying, check repro.
-    if(sp < t_m.size1())
-        if(t_m(sp, ++i) > curr_max)
-        {
-            max_pos = i;
-            curr_max = t_m(sp, i);
-        }
-    
+    //We only want to consider reproduction as a last resort
+    // - the value of 0.0 comes from other code that sets the value at that if we've run out of those species to use in the transition
+    if(curr_max == 0.0)
+    {
+        //If we're not going to reproduction (a nonsense) or dying, check repro.
+        if(sp < t_m.size1())
+            if(t_m(sp, ++i) > curr_max)
+            {
+                max_pos = i;
+                curr_max = t_m(sp, i);
+            }
+    }
     assert(max_pos != -1 && curr_max != -1); //We have found a new maximum
     return max_pos;
 }
@@ -189,7 +117,7 @@ ublas::matrix<int> likely_transitions(ublas::matrix<double> transition_matrix, c
     //Number of species in the list
     assert(species_names.size() == transition_matrix.size2());
     assert(species_names.size() == (transition_matrix.size1() +2));
-    const unsigned REPRODUCTION = (species_names.size() - 1);
+    const unsigned REPRODUCTION = (species_names.size()-1);
     const int NSPECIES = (species_names.size() - 2);
     
     //Make an events matrix (to be returned)
@@ -263,7 +191,7 @@ ublas::matrix<int> likely_transitions(ublas::matrix<double> transition_matrix, c
                     if(stationary_sp[j] > 0)
                     {
                         ++events_matrix(j,REPRODUCTION);
-                        --events_matrix(j,j);
+                        //--events_matrix(j,j); Not under the new method - reproduction and stationarity are separate
                         --stationary_sp[j]; 
                         finished = 1;
                     }

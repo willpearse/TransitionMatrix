@@ -12,7 +12,9 @@
 //  Class 'Community' represents a single community (with multiple entries for multiple years)
 //  Class 'Data' represents multiple communities
 //  The file is sorted according to the type of operation, not by class
+//
 //  TO-DO: use polymorphism, etc., to neaten things a little
+//  TO-DO: the random simulator is not appropriate for the new reproduction model
 //
 
 #include "communityData.h"
@@ -53,14 +55,20 @@ void Community::set_e_m(void)
 }
 void Community::set_t_m(double stationary_prob)
 {
+    double repro_freq = 1.0 / species_names.size();
+    int j;
     t_m.resize(species_names.size(), species_names.size()+2);
     double leftover_prob = (1 - stationary_prob) / (species_names.size() + 1);
     for(int i=0; i<t_m.size1(); ++i)
-        for(int j=0; j<t_m.size2(); ++j)
+    {
+        for(j=0; j<(t_m.size2()-1); ++j)
             if(i==j)
                 t_m(i,j) = stationary_prob;
             else
                 t_m(i,j) = leftover_prob;
+        //Assign the reproduction frequency
+        t_m(i,j) = repro_freq;
+    }
 }
 void Community::set_t_null(void)
 {
@@ -83,14 +91,20 @@ void Community::set_t_null(void)
 }
 void DataSet::set_t_m(double stationary_prob)
 {
+    double repro_freq = 1.0 / species_names.size();
+    int j;
     t_m.resize(species_names.size(), species_names.size()+2);
     double leftover_prob = (1 - stationary_prob) / (species_names.size() + 1);
     for(int i=0; i<t_m.size1(); ++i)
-        for(int j=0; j<t_m.size2(); ++j)
+    {
+        for(j=0; j<(t_m.size2()-1); ++j)
             if(i==j)
                 t_m(i,j) = stationary_prob;
             else
                 t_m(i,j) = leftover_prob;
+        //Assign the reproduction frequency
+        t_m(i,j) = repro_freq;
+    }
 }
 void DataSet::set_t_null(void)
 {
@@ -164,8 +178,8 @@ Community::Community(ublas::matrix<double> transition_matrix, vector<string> sp_
     //Add in death and reproduction for the species
     species_names = sp_names;
     n_species = sp_names.size();
-    sp_names.push_back("REPRODUCE");
     sp_names.push_back("DEATH");
+    sp_names.push_back("REPRODUCE");
     assert(sp_names.size() == transition_matrix.size2());
     sp_names_repro_death = sp_names;
     set_t_m();
@@ -294,8 +308,8 @@ void Community::initialise(void)
     
     //Set species names for calculations
     sp_names_repro_death = species_names;
-    sp_names_repro_death.push_back("REPRODUCE");
     sp_names_repro_death.push_back("DEATH");
+    sp_names_repro_death.push_back("REPRODUCE");
     
     //Make a rough transition matrix
     set_t_m();
@@ -346,10 +360,15 @@ double likelihood_parameter_com(double prob, int row, int column, vector<ublas::
     double total_likelihood,fudge_factor,leftover;
     
     //Set the new probability in the transition_matrix
+    // - make sure you leave the reproducing column alone (this no longer sums to zero)
     leftover = 1 - prob;
     fudge_factor = 1 - t_m(row,column);
-    for(i=0; i<t_m.size2(); ++i)
-        t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
+    if(column != (t_m.size2()-1))
+        for(i=0; i<(t_m.size2()-1); ++i)
+            t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
+    else
+        for(i=0; i<(t_m.size1()); ++i)
+            t_m(i,t_m.size2()-1) = (t_m(i,t_m.size2()-1) / fudge_factor) * leftover;
     t_m(row,column) = prob;
     
     //Calculate likelihood
@@ -379,10 +398,14 @@ double likelihood_parameter_data(double prob, int row, int column, vector<Commun
     double total_likelihood,fudge_factor,leftover;
     
     //Set the new probability in the transition_matrix
-    leftover = 1 - prob;
-    fudge_factor = 1 - t_m(row,column);
-    for(i=0; i<t_m.size2(); ++i)
-        t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
+    // - make sure you leave the reproducing column alone (this no longer sums to zero)
+    if(column != (t_m.size2()-1))
+    {
+        leftover = 1 - prob;
+        fudge_factor = 1 - t_m(row,column);
+        for(i=0; i<(t_m.size2()-1); ++i)
+            t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
+    }
     t_m(row,column) = prob;
     
     //Calculate likelihood for each community
@@ -481,21 +504,37 @@ double likelihood_null_parameter_data(double prob, int species, vector<Community
 double Community::optimise(int max_iter)
 {
     //Setup
-    double sum_of_parameters=0.0;
+    double sum_of_parameters=0.0, sum_of_repro_parameters=0.0;
     //Loop through each parameter
     for(row=0; row<t_m.size1(); ++row)
     {
+        //Re-set the sum of parameters
+        sum_of_parameters = 0.0;
         for(int column=0; column<t_m.size2(); ++column)
         {
-            //Are we dealing with the last parameter?
-            if(column == (t_m.size2()-1))
+            //Are we dealing with the last (altered) parameter? Or the reproduction parameter?
+            if(column >= t_m.size2()-2)
             {
-                // - a dodgy way to set the last parameter!
-                t_m(row,column) = 1.0 - sum_of_parameters;
-                sum_of_parameters = 0.0;
+                //Last transition parameter
+                if(column == (t_m.size2()-2))
+                    t_m(row,column) = 1.0 - sum_of_parameters;
+                else
+                {
+                    //Reproduction parameter
+                    // - check to see if this is the last parameter that we need to optimise
+                    if(row == (t_m.size1()-1))
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
+                        //t_m(row,column) = 1.0 - sum_of_repro_parameters;
+                    else
+                    {
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
+                        sum_of_repro_parameters += t_m(row,column);
+                    }
+                }
             }
             else
             {
+                //Normal transition parameter
                 t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
                 sum_of_parameters += t_m(row,column);
             }
@@ -513,24 +552,42 @@ double Community::optimise_null(int max_iter)
 void DataSet::optimise(int max_iter)
 {
     //Setup
-    double sum_of_parameters=0.0;
+    double sum_of_parameters=0.0,sum_of_repro_parameters=0.0;
     vector<double> likelihoods(communities.size());
     //Loop through each parameter
     for(row=0; row<t_m.size1(); ++row)
     {
-        for(column=0; column<t_m.size2(); ++column)
+        sum_of_parameters = 0.0;
+        for(int column=0; column<t_m.size2(); ++column)
         {
-            //Are we dealing with the last parameter?
-            if(column == (t_m.size2()-1))
+            //Are we dealing with the last (altered) parameter? Or the reproduction parameter?
+            if(column >= t_m.size2()-2)
             {
-                // - a dodgy way to set the last parameter!
-                t_m(row,column) = 1.0 - sum_of_parameters;
-                sum_of_parameters = 0.0;
+                //Last transition parameter
+                if(column == (t_m.size2()-2))
+                    t_m(row,column) = 1.0 - sum_of_parameters;
+                else
+                {
+                    //Reproduction parameter
+                    // - check to see if this is the last parameter that we need to optimise
+                    if(row == (t_m.size1()-1))
+                    {
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
+                        cout << row << ":" << column << " " << t_m(row,column) << endl;
+                        //t_m(row,column) = 1.0 - sum_of_repro_parameters;
+                    }
+                    else
+                    {
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
+                        cout << row << ":" << column << " " << t_m(row,column) << endl;
+                        sum_of_repro_parameters += t_m(row,column);
+                    }
+                }
             }
             else
             {
+                //Normal transition parameter
                 t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
-                cout << t_m(row,column) << ",";
                 sum_of_parameters += t_m(row,column);
             }
         }
@@ -640,7 +697,7 @@ boost::numeric::ublas::matrix<double> Community::print_transition_matrix(int wid
     cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Death" << setw(width) << "Repro." << endl;
     
     //Looping through
     for(i = 0; i<t_m.size1(); ++i)
@@ -662,7 +719,7 @@ boost::numeric::ublas::matrix<int> Community::print_real_transition_matrix(int w
     cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Death" << setw(width) << "Repro." << endl;
     
     //Looping through
     for(int i = 0; i<real_t_m.size1(); ++i)
@@ -681,7 +738,7 @@ boost::numeric::ublas::matrix<double> DataSet::print_transition_matrix(int width
     cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Death" << setw(width) << "Repro." << endl;
     
     //Looping through
     for(int i = 0; i<t_m.size1(); ++i)
@@ -754,7 +811,7 @@ boost::numeric::ublas::matrix<int> Community::print_event_matrix(int index, int 
     cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Death" << setw(width) << "Repro." << endl;
     
     //Looping through
     for(int i = 0; i<curr_e_m.size1(); ++i)
@@ -776,7 +833,7 @@ void Community::write_transition_matrix(const char* file_name)
     file << calc_likelihoods();
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         file << "," << *iter;
-    file << ",Reproduction,Death" << endl;
+    file << ",Death,Reproduction" << endl;
     
     //Looping through
     for(int i = 0; i<t_m.size1(); ++i)
@@ -800,7 +857,7 @@ void DataSet::write_transition_matrix(const char* file_name)
     file << calc_likelihoods();
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         file << "," << *iter;
-    file << ",Reproduction,Death" << endl;
+    file << ",Death,Reproduction" << endl;
     
     //Looping through
     for(int i = 0; i<t_m.size1(); ++i)
@@ -822,7 +879,6 @@ void DataSet::write_null_transition_vector(const char* file_name)
     
     //Header
     file << calc_null_likelihoods();
-    //Header
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         file << "," << *iter;
     file << endl;
@@ -847,7 +903,7 @@ boost::numeric::ublas::matrix<int> Community::print_real_event_matrix(int index,
     cout << endl << setw(width) << "" ;
     for(vector<string>::const_iterator iter = species_names.begin(); iter != species_names.end(); ++iter)
         cout << setw(width) << *iter;
-    cout << setw(width) << "Repro." << setw(width) << "Death" << endl;
+    cout << setw(width) << "Death" << setw(width) << "Repro." << endl;
     
     //Looping through
     for(int i = 0; i<curr_e_m.size1(); ++i)
