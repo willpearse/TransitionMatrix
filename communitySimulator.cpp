@@ -16,25 +16,35 @@ using namespace boost::numeric;
 vector<double> likelihood(ublas::matrix<double> transition_matrix, ublas::matrix<int> event_matrix)
 {
     //Setup
-    int n_events=0,i,k,x=0;
-    for(i=0; i<event_matrix.size1(); ++i)
+    //int n_events=0,x=0;
+    /*for(i=0; i<event_matrix.size1(); ++i)
         for(k=0; k<event_matrix.size2(); ++k)
-            n_events += event_matrix(i,k);
-    vector<double> likelihoods(n_events);
+            n_events += event_matrix(i,k);*/
+    vector<double> likelihoods;//(n_events);
     
     //Loop through events and calculate likelihood
     // - check to see if double looping to pre-allocate is worth it
-    for(i=0; i<event_matrix.size1(); ++i)
-        for(k=0; k<event_matrix.size2(); ++k)
+    for(int i=0; i<event_matrix.size1(); ++i)
+        for(int k=0; k<event_matrix.size2(); ++k)
         {
-            while(event_matrix(i,k)>0)
+            int to_do=event_matrix(i,k);
+            while(to_do)
             {
-                likelihoods[x++] = transition_matrix(i,k);
-                --event_matrix(i,k);
+                likelihoods.push_back(transition_matrix(i,k));
+                --to_do;
             }
         }
     //Return and check
-    assert(x == n_events);
+    //assert(x == n_events);
+    return likelihoods;
+}
+vector<double> log_likelihood(ublas::matrix<double> transition_matrix, ublas::matrix<int> event_matrix)
+{
+    vector<double> likelihoods;
+    for(int i=0; i<event_matrix.size1(); ++i)
+        for(int k=0; k<event_matrix.size2(); ++k)
+            while(event_matrix(i,k)--)
+                likelihoods.push_back(log(transition_matrix(i,k)));
     return likelihoods;
 }
 vector<double> likelihood_null(vector<double> transition_null, vector<string> community, vector<string> species_names)
@@ -233,7 +243,7 @@ ublas::matrix<int> likely_transitions(ublas::matrix<double> transition_matrix, c
         }
         
         //We have done something
-        assert(finished);
+        //assert(finished);
     }
         
     return events_matrix;

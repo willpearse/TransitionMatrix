@@ -16,7 +16,7 @@ using namespace boost::numeric;
 
 int main (int argc, const char * argv[])
 {
-	cout << "EXPERIMENTAL: Don't trust any results from this version" << endl;
+	cout << "EXPERIMENTAL: Don't trust any results from this version" << endl << "---in particular, the simualtions seem to produce very hard to estimate communities..." << endl;
     if(argc == 5)
     {
         //Only works for the first community...
@@ -35,7 +35,7 @@ int main (int argc, const char * argv[])
         cout << "Writing null transition vector to file " << argv[4] << endl;
         data.write_null_transition_vector(argv[4]);
         cout << "...done (first entry is log likelihood of null model)" << endl;
-    } else
+    }
     {
         if(argc == 4)
         {
@@ -46,7 +46,7 @@ int main (int argc, const char * argv[])
             test_t_m(2,0)=0.0;test_t_m(2,1)=0.0;test_t_m(2,2)=0.8;test_t_m(2,3)=0.0;test_t_m(2,4)=0.2;
             vector<string> test_names(3);
             test_names[0]="Will";test_names[1]="Fern";test_names[2]="Andre";
-            Community data(test_t_m, test_names, 50, 100, "Test Community", 123);
+            Community data(test_t_m, test_names, 50, 50, "Test Community", 123);
             cout << "Optimising... This is *achingly* slow at the moment" << endl;
             data.optimise();
             cout << "Real transition matrix used to generate the data was:" << endl;

@@ -355,7 +355,7 @@ void Community::add_species(string species, string abundance, string year)
 double likelihood_parameter_com(double prob, int row, int column, vector<ublas::matrix<int> > e_m, ublas::matrix<double> t_m, int minimising)
 {
     //Setup
-    vector<double> likelihoods(e_m.size()), current_likelihood(e_m.size());
+    vector<double> likelihoods(e_m.size());
     int i;
     double total_likelihood,fudge_factor,leftover;
     
@@ -365,22 +365,21 @@ double likelihood_parameter_com(double prob, int row, int column, vector<ublas::
     fudge_factor = 1 - t_m(row,column);
     if(column != (t_m.size2()-1))
         for(i=0; i<(t_m.size2()-1); ++i)
+        {
             t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
+        }
     else
         for(i=0; i<(t_m.size1()); ++i)
+        {
             t_m(i,t_m.size2()-1) = (t_m(i,t_m.size2()-1) / fudge_factor) * leftover;
+        }
     t_m(row,column) = prob;
     
     //Calculate likelihood
     for(i=0; i < e_m.size(); ++i)
     {
-        current_likelihood = likelihood(t_m, e_m[i]);
-        
-        for(int j=0; j<current_likelihood.size(); ++j)
-            current_likelihood[j] = log(current_likelihood[j]);
-        
+        vector<double> current_likelihood = log_likelihood(t_m, e_m[i]);        
         likelihoods[i] = accumulate(current_likelihood.begin(), current_likelihood.end(), 0.0);
-        current_likelihood.clear();
     }
     
     //Return inverse of log likelihood if passing to a minimising function
@@ -399,13 +398,15 @@ double likelihood_parameter_data(double prob, int row, int column, vector<Commun
     
     //Set the new probability in the transition_matrix
     // - make sure you leave the reproducing column alone (this no longer sums to zero)
-    if(column != (t_m.size2()-1))
-    {
-        leftover = 1 - prob;
-        fudge_factor = 1 - t_m(row,column);
-        for(i=0; i<(t_m.size2()-1); ++i)
+    leftover = 1 - prob;
+    fudge_factor = 1 - t_m(row,column);
+    int size2=t_m.size2(), size1=t_m.size1();
+    if(column != (size2-1))
+        for(i=0; i<(size2-1); ++i)
             t_m(row,i) = (t_m(row,i) / fudge_factor) * leftover;
-    }
+    else
+        for(i=0; i<(size1); ++i)
+            t_m(i,size2-1) = (t_m(i,size2-1) / fudge_factor) * leftover;
     t_m(row,column) = prob;
     
     //Calculate likelihood for each community
@@ -501,17 +502,24 @@ double likelihood_null_parameter_data(double prob, int species, vector<Community
     else
         return total_likelihood;
 }
-double Community::optimise(int max_iter)
+double Community::optimise(int bit_level, int verbose)
 {
     //Setup
     double sum_of_parameters=0.0, sum_of_repro_parameters=0.0;
     //Loop through each parameter
     for(row=0; row<t_m.size1(); ++row)
     {
+        if(verbose)
+            cout << endl << "---Row " << row << ":";
         //Re-set the sum of parameters
         sum_of_parameters = 0.0;
         for(int column=0; column<t_m.size2(); ++column)
         {
+            if(verbose)
+            {
+                cout << column << ".";
+                cout.flush();
+            }
             //Are we dealing with the last (altered) parameter? Or the reproduction parameter?
             if(column >= t_m.size2()-2)
             {
@@ -523,11 +531,10 @@ double Community::optimise(int max_iter)
                     //Reproduction parameter
                     // - check to see if this is the last parameter that we need to optimise
                     if(row == (t_m.size1()-1))
-                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
-                        //t_m(row,column) = 1.0 - sum_of_repro_parameters;
+                        t_m(row,column) = 1.0 - sum_of_repro_parameters;
                     else
                     {
-                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, bit_level).first;
                         sum_of_repro_parameters += t_m(row,column);
                     }
                 }
@@ -535,11 +542,13 @@ double Community::optimise(int max_iter)
             else
             {
                 //Normal transition parameter
-                t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, max_iter).first;
+                t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_com, _1, row,column,e_m,t_m,1), 0.0, 1.0, bit_level).first;
                 sum_of_parameters += t_m(row,column);
             }
         }
     }
+    if(verbose)
+        cout << endl;
     return calc_likelihoods();
 }
 double Community::optimise_null(int max_iter)
@@ -549,7 +558,7 @@ double Community::optimise_null(int max_iter)
         t_null[species] = boost::math::tools::brent_find_minima(boost::bind(likelihood_null_parameter_com, _1, species,communities,t_null,species_names, 1), 0.0, 1.0, max_iter).first;
     return calc_null_likelihoods();
 }
-void DataSet::optimise(int max_iter)
+void DataSet::optimise(int bit_level, int verbose)
 {
     //Setup
     double sum_of_parameters=0.0,sum_of_repro_parameters=0.0;
@@ -557,9 +566,17 @@ void DataSet::optimise(int max_iter)
     //Loop through each parameter
     for(row=0; row<t_m.size1(); ++row)
     {
+        if(verbose)
+            cout << endl << "---Row " << row << ":";
+        
         sum_of_parameters = 0.0;
         for(int column=0; column<t_m.size2(); ++column)
         {
+            if(verbose)
+            {
+                cout << column << ".";
+                cout.flush();
+            }
             //Are we dealing with the last (altered) parameter? Or the reproduction parameter?
             if(column >= t_m.size2()-2)
             {
@@ -571,15 +588,10 @@ void DataSet::optimise(int max_iter)
                     //Reproduction parameter
                     // - check to see if this is the last parameter that we need to optimise
                     if(row == (t_m.size1()-1))
-                    {
-                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
-                        cout << row << ":" << column << " " << t_m(row,column) << endl;
-                        //t_m(row,column) = 1.0 - sum_of_repro_parameters;
-                    }
+                        t_m(row,column) = 1.0 - sum_of_repro_parameters;
                     else
                     {
-                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
-                        cout << row << ":" << column << " " << t_m(row,column) << endl;
+                        t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, bit_level).first;
                         sum_of_repro_parameters += t_m(row,column);
                     }
                 }
@@ -587,11 +599,13 @@ void DataSet::optimise(int max_iter)
             else
             {
                 //Normal transition parameter
-                t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, max_iter).first;
+                t_m(row,column) = boost::math::tools::brent_find_minima(boost::bind(likelihood_parameter_data, _1, row,column,communities,t_m,1), 0.0, 1.0, bit_level).first;
                 sum_of_parameters += t_m(row,column);
             }
         }
     }
+    if(verbose)
+        cout << endl;
 }
 void DataSet::optimise_null(int max_iter)
 {

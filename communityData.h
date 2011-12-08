@@ -54,7 +54,7 @@ public:
     std::vector<std::string> extract_index(int index);
     double calc_likelihoods(void);
     double calc_null_likelihoods(void);
-    double optimise(int max_iter=100);
+    double optimise(int bit_level=10, int verbose=1);
     double optimise_null(int max_iter=100);
     boost::numeric::ublas::matrix<double> print_transition_matrix(int width=4);
     std::vector<double> print_null_transition_vector(int width=4);
@@ -85,7 +85,7 @@ private:
 public:
     DataSet(const char *file, double prob=0.6);
     double internal_optimise(double prob);
-    void optimise(int max_iter=100);
+    void optimise(int bit_level=10, int verbose=1);
     void optimise_null(int max_iter=100);
     void partition(int max_iter=100);
     boost::numeric::ublas::matrix<double> print_transition_matrix(int width=4);
